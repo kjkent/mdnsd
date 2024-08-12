@@ -1,50 +1,49 @@
-# Makefile for mdns-repeater
+# Makefile for mdns-repeater by geekman
+# https://github.com/geekman/mdns-repeater
 
+NAME := mdns-repeater
 
-ZIP_NAME = mdns-repeater-$(HGVERSION)
+INSTALL_DIR := $(PREFIX)/bin
+OUT_DIR := build
+SRC_DIR := lib/mdns-repeater
 
-ZIP_FILES = mdns-repeater	\
-			README.txt		\
-			LICENSE.txt
+TARGET := $(OUT_DIR)/$(NAME)
+SRC := $(SRC_DIR)/$(NAME).c
+OBJ := $(TARGET).o
 
-HGVERSION=$(shell git rev-parse HEAD )
+GITVERFILE := $(OUT_DIR)/gitversion
+GITVERSION := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo -n 'unknown')
 
-CFLAGS=-Wall
+CFLAGS += -DHGVERSION="\"$(GITVERSION)\"" -Wall -s
+LDFLAGS += -s
 
-ifdef DEBUG
-CFLAGS+= -g
-else
-CFLAGS+= -Os
-LDFLAGS+= -s
-endif
+$(TARGET): $(OBJ)
+	$(CC) $(LDFLAGS) $< -o $@
 
-CFLAGS+= -DHGVERSION="\"${HGVERSION}\""
+$(OBJ): $(GITVERFILE)
+	$(CC) $(CFLAGS) -c $(SRC) -o $@
 
-.PHONY: all clean
+.PHONY: all clean install docker-build docker-push
 
-all: mdns-repeater
-
-mdns-repeater.o: _hgversion
-
-mdns-repeater: mdns-repeater.o
-
-.PHONY: zip
-zip: TMPDIR := $(shell mktemp -d)
-zip: mdns-repeater
-	mkdir $(TMPDIR)/$(ZIP_NAME)
-	cp $(ZIP_FILES) $(TMPDIR)/$(ZIP_NAME)
-	-$(RM) $(CURDIR)/$(ZIP_NAME).zip
-	cd $(TMPDIR) && zip -r $(CURDIR)/$(ZIP_NAME).zip $(ZIP_NAME)
-	-$(RM) -rf $(TMPDIR)
-
-# version checking rules
-.PHONY: dummy
-_hgversion: dummy
-	@echo $(HGVERSION) | cmp -s $@ - || echo $(HGVERSION) > $@
+all: $(TARGET)
 
 clean:
-	-$(RM) *.o
-	-$(RM) _hgversion
-	-$(RM) mdns-repeater
-	-$(RM) mdns-repeater-*.zip
+	@rm -rf $(OUT_DIR)
 
+install: $(TARGET)
+	install -m 0751 -t $(INSTALL_DIR) $(TARGET)
+
+$(OUT_DIR):
+	mkdir -p $(OUT_DIR)
+
+# | $(OUT_DIR) ignores timestamp; only runs mkdir once
+$(GITVERFILE): | $(OUT_DIR)
+	cmp -s $(cat $@) $(GITVERSION) || echo $(GITVERSION) > $@
+
+docker-build: $(TARGET)
+	IMAGE_VERSION=$(GITVERSION) \
+		docker compose -f docker/docker-compose.yaml \
+		build
+
+docker-push: docker-build
+# TODO: Finish docker-push

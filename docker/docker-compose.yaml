@@ -1,0 +1,10 @@
+services:
+  mdns-repeater:
+    build:
+      additional_contexts:
+        project-root: ..
+      tags: 
+        - "kjkent/docker-mdns-repeater:${IMAGE_VERSION:-unknown}"
+    container_name: mdns-repeater
+    image: kjkent/docker-mdns-repeater:latest
+    network_mode: host
