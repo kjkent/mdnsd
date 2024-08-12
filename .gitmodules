@@ -1,0 +1,4 @@
+[submodule "lib/mdns-repeater"]
+	path = lib/mdns-repeater
+	url = https://github.com/geekman/mdns-repeater.git
+	branch = master
