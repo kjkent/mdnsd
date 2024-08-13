@@ -1,0 +1,8 @@
+services:
+  mdns-repeater:
+    container_name: mdns-repeater
+    environment:
+      MDNS_DOCKER_NETWORKS: 'br-badc0ffee'
+      MDNS_HOST_INTERFACES: 'enp0s1'
+    image: kjkent/docker-mdns-repeater:latest
+    network_mode: host

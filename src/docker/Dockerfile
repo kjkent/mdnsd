@@ -27,7 +27,7 @@ ARG TMPDIR
 
 COPY --from=build --chmod=0751 "${TMPDIR}"/build/mdns-repeater /bin/
 
-RUN apk add --no-cache libcap-setcap
+RUN apk add --no-cache libcap-setcap python3
 RUN setcap cap_net_raw=+ep /bin/mdns-repeater
 
 ENTRYPOINT ["/bin/mdns-repeater", "-f"]

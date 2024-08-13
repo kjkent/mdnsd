@@ -7,9 +7,9 @@ INSTALL_DIR := $(PREFIX)/bin
 OUT_DIR := build
 SRC_DIR := lib/mdns-repeater
 
-TARGET := $(OUT_DIR)/$(NAME)
+BUILD := $(OUT_DIR)/$(NAME)
 SRC := $(SRC_DIR)/$(NAME).c
-OBJ := $(TARGET).o
+OBJ := $(BUILD).o
 
 GITVERFILE := $(OUT_DIR)/gitversion
 GITVERSION := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo -n 'unknown')
@@ -17,30 +17,35 @@ GITVERSION := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo -n 'unkno
 CFLAGS += -DHGVERSION="\"$(GITVERSION)\"" -Wall -s
 LDFLAGS += -s
 
-$(TARGET): $(OBJ)
+# Build targets
+
+$(BUILD): $(OBJ)
 	$(CC) $(LDFLAGS) $< -o $@
 
-$(OBJ): $(GITVERFILE)
-	$(CC) $(CFLAGS) -c $(SRC) -o $@
+$(OBJ): $(SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-.PHONY: all clean install docker-build docker-push
-
-all: $(TARGET)
-
-clean:
-	@rm -rf $(OUT_DIR)
-
-install: $(TARGET)
-	install -m 0751 -t $(INSTALL_DIR) $(TARGET)
-
-$(OUT_DIR):
-	mkdir -p $(OUT_DIR)
+$(SRC): $(GITVERFILE)
+	git submodule update --init --force --checkout
 
 # | $(OUT_DIR) ignores timestamp; only runs mkdir once
 $(GITVERFILE): | $(OUT_DIR)
 	cmp -s $(cat $@) $(GITVERSION) || echo $(GITVERSION) > $@
 
-docker-build: $(TARGET)
+$(OUT_DIR):
+	mkdir -p $@
+
+.PHONY: all clean install docker-build docker-push
+
+all: $(BUILD)
+
+clean:
+	rm -rf $(OUT_DIR)
+
+install: $(BUILD)
+	install -m 0751 -t $(INSTALL_DIR) $<
+
+docker-build: $(BUILD)
 	IMAGE_VERSION=$(GITVERSION) \
 		docker compose -f docker/docker-compose.yaml \
 		build
