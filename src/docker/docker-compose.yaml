@@ -1,8 +1,10 @@
 services:
-  mdns-repeater:
-    container_name: mdns-repeater
+  mdnsd:
+    container_name: mdnsd
     environment:
-      MDNS_DOCKER_NETWORKS: 'br-badc0ffee'
-      MDNS_HOST_INTERFACES: 'enp0s1'
-    image: kjkent/docker-mdns-repeater:latest
+      MDNSD_DOCKER_NETWORKS: 'traefik-proxy'
+      MDNSD_HOST_INTERFACES: 'enp6s0'
+    image: kjkent/mdnsd
     network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro

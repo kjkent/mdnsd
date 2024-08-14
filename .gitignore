@@ -1,3 +1,8 @@
+.st_folder
+.sync-conflict-*
+venv/
+**/*.env*
+
 # Created by https://www.toptal.com/developers/gitignore/api/linux,visualstudiocode,jetbrains,python,venv,c,git,dotenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=linux,visualstudiocode,jetbrains,python,venv,c,git,dotenv
 

@@ -1,54 +1,113 @@
-# Makefile for mdns-repeater by geekman
-# https://github.com/geekman/mdns-repeater
+# Makefile for mdnsd by kjkent (https://github.com/kjkent)
+# 
+# mdnsd is a Docker wrapper for mdns-repeater by geekman
+# (https://github.com/geekman/mdns-repeater)
 
-NAME := mdns-repeater
+NAME := mdnsd
+MDNSD_VERSION := 0.1.0
+
+SRC_DIR := src
+VENV_DIR := venv
+PYTHON_DIR := $(SRC_DIR)/python
+DOCKER_DIR := $(SRC_DIR)/docker
+DOCKER_IMAGE := kjkent/$(NAME)
+
+MR_NAME := mdns-repeater
+MR_BUILD_DIR := build
+MR_BUILD := $(MR_BUILD_DIR)/$(MR_NAME)
+MR_SRC_DIR := lib/$(MR_NAME)
+MR_SRC := $(MR_SRC_DIR)/$(MR_NAME).c
+MR_OBJ := $(MR_BUILD).o
 
 INSTALL_DIR := $(PREFIX)/bin
-OUT_DIR := build
-SRC_DIR := lib/mdns-repeater
 
-BUILD := $(OUT_DIR)/$(NAME)
-SRC := $(SRC_DIR)/$(NAME).c
-OBJ := $(BUILD).o
+MR_GIT_VER_FILE := $(MR_BUILD_DIR)/gitversion
+MR_GITVERSION := $(shell git rev-parse --short=8 HEAD 2>/dev/null || exit 1)
 
-GITVERFILE := $(OUT_DIR)/gitversion
-GITVERSION := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo -n 'unknown')
+RELEASE_VERSION := $(MDNSD_VERSION)-$(MR_GITVERSION)
 
-CFLAGS += -DHGVERSION="\"$(GITVERSION)\"" -Wall -s
+CFLAGS += -DHGVERSION="\"$(MR_GITVERSION)\"" -Wall -s
 LDFLAGS += -s
 
-# Build targets
+# Detect Alpine (musl flags needed)
+ALPINE := $(shell grep -si ID=alpine /etc/os-release 2>/dev/null)
 
-$(BUILD): $(OBJ)
+# Alpine-specific flags
+# Warning: Will not build if tab-indented
+# (denotes recipe, invalid before first target)
+ifdef ALPINE
+  $(info 'Alpine detected  (⌐■_■)')
+  CFLAGS += -D_GNU_SOURCE
+
+  # find musl dynamic linker
+  MUSL_DL := $(shell find /lib -name 'ld-musl-*.so.*' 2>/dev/null | head -n 1)
+
+  ifneq ($(MUSL_DL),)
+    $(info "Found musl dynamic linker $(MUSL_DL)")
+    LDFLAGS += -Wl,--dynamic-linker=$(MUSL_DL)
+  endif
+
+endif
+
+# Build targets
+$(MR_BUILD): $(MR_OBJ)
 	$(CC) $(LDFLAGS) $< -o $@
 
-$(OBJ): $(SRC)
+$(MR_OBJ): $(MR_SRC)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(SRC): $(GITVERFILE)
-	git submodule update --init --force --checkout
+$(MR_SRC): $(MR_GIT_VER_FILE) | submodule
 
-# | $(OUT_DIR) ignores timestamp; only runs mkdir once
-$(GITVERFILE): | $(OUT_DIR)
-	cmp -s $(cat $@) $(GITVERSION) || echo $(GITVERSION) > $@
+# | $(MR_BUILD_DIR) ignores timestamp; only runs mkdir once
+$(MR_GIT_VER_FILE): | $(MR_BUILD_DIR)
+	cmp -s $(cat $@) $(MR_GITVERSION) || echo $(MR_GITVERSION) > $@
 
-$(OUT_DIR):
+$(MR_BUILD_DIR):
 	mkdir -p $@
 
-.PHONY: all clean install docker-build docker-push
+$(VENV_DIR):
+	python -m venv --upgrade-deps $@
+	$@/bin/pip install -r $(PYTHON_DIR)/requirements.txt
 
-all: $(BUILD)
+.PHONY: all \
+	      clean \
+				install \
+				docker-dev-build \
+				docker-dev-push \
+				docker-rel-build \
+				docker-rel-push \
+				submodule
+
+all: $(MR_BUILD)
 
 clean:
-	rm -rf $(OUT_DIR)
+	-rm -rf $(MR_BUILD_DIR) $(VENV_DIR)
+	docker image ls | \
+		grep $(DOCKER_IMAGE) | \
+			awk '{system("docker rmi " $$1 ":" $$2)}' 2>/dev/null
 
-install: $(BUILD)
+install: $(MR_BUILD)
 	install -m 0751 -t $(INSTALL_DIR) $<
 
-docker-build: $(BUILD)
-	IMAGE_VERSION=$(GITVERSION) \
-		docker compose -f docker/docker-compose.yaml \
+docker-dev-build: $(MR_BUILD)
+	IMAGE_VERSION=dev docker compose \
+		--progress=plain \
+		-f $(DOCKER_DIR)/build.yaml \
 		build
 
-docker-push: docker-build
-# TODO: Finish docker-push
+docker-dev-push: docker-dev-build
+	docker push $(DOCKER_IMAGE):dev
+
+docker-rel-build: $(MR_BUILD)
+	IMAGE_VERSION=$(RELEASE_VERSION) docker compose \
+		--progress=plain \
+		-f $(DOCKER_DIR)/build.yaml \
+		build
+	
+	docker image tag $(DOCKER_IMAGE):$(RELEASE_VERSION) $(DOCKER_IMAGE):latest
+
+docker-rel-push: docker-rel-build
+	docker push $(DOCKER_IMAGE):latest $(DOCKER_IMAGE):$(RELEASE_VERSION)
+
+submodule:
+	[ -f $(MR_SRC) ] || git submodule update --init --force --checkout
